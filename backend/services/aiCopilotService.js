@@ -38,42 +38,34 @@ async function generateResponse(organisationId, question, fileText = null) {
 }
 
 function buildDocumentAnalysisPrompt(context, question, fileText) {
-  const systemPrompt = `You are a compliance copilot assistant. When a document is provided, analyze it first and relate findings to the organization's compliance needs.
+  const systemPrompt = `You are a compliance document analyzer. Analyze the document content provided and give specific details from it.`;
 
-Provide your response in this structure:
-1. Document Summary: Brief overview of the document
-2. Relevance Assessment: How it relates to the company
-3. Compliance Implications: Applicable areas
-4. Evidence Potential: Which tasks it could support
-5. Recommendations: Actionable next steps`;
+  const docPreview = fileText.substring(0, 2500);
+  
+  const userPrompt = `Company Industry: ${context.companySummary?.industry || "Unknown"}
+Countries: ${context.companySummary?.countries?.join(", ") || "Unknown"}
+Compliance Areas: ${context.applicableDomains.slice(0, 3).join(", ")}
 
-  const contextSummary = `COMPANY CONTEXT:
-- Legal Name: ${context.companySummary?.legalName || "Not specified"}
-- Industry: ${context.companySummary?.industry || "Not specified"}
-- Operating Countries: ${context.companySummary?.countries?.join(", ") || "Not specified"}
-- Data Types: ${context.companySummary?.dataTypes?.join(", ") || "None"}
-- Overdue Tasks: ${context.riskHighlights.overdue}
-- Due Soon: ${context.riskHighlights.dueSoon}
-- Applicable Domains: ${context.applicableDomains.join(", ")}
+Pending Tasks:
+${context.topPendingTasks.slice(0, 3).map(t => `- ${t.title}`).join("\n")}
 
-PENDING TASKS:
-${context.topPendingTasks.map(t => `- ${t.title} (${t.category})`).join("\n")}`;
+=== DOCUMENT CONTENT ===
+${docPreview}
+=== END DOCUMENT ===
 
-  const userPrompt = `${contextSummary}
+User asks: ${question}
 
-DOCUMENT CONTENT:
-${fileText}
+Analyze the document above and answer:
 
-USER QUESTION:
-${question}
+1. SUMMARY: What type of document is this? What does it contain?
 
-INSTRUCTIONS:
-- Summarize the document purpose
-- Evaluate relevance to the company
-- Identify applicable compliance areas
-- Suggest if it can be used as task evidence
-- Highlight risks or missing sections
-- Provide actionable recommendations`;
+2. RELEVANCE: Is this relevant to a ${context.companySummary?.industry || "company"} operating in ${context.companySummary?.countries?.join(", ") || "these countries"}? Answer YES or NO and explain why based on the document content.
+
+3. COMPLIANCE: Which of these areas does it relate to: ${context.applicableDomains.slice(0, 3).join(", ")}?
+
+4. EVIDENCE: Can this document be used as evidence for any of these tasks: ${context.topPendingTasks.slice(0, 3).map(t => t.title).join(", ")}?
+
+5. RECOMMENDATION: What should the company do with this document?`;
 
   return { systemPrompt, userPrompt };
 }
@@ -116,26 +108,58 @@ async function callLLM(systemPrompt, userPrompt) {
   }
 
   try {
-    const hf = new HfInference(apiKey);
+    console.log("Calling HF API with model: Qwen/Qwen2.5-7B-Instruct");
+    console.log("Prompt length:", userPrompt.length);
     
-    const response = await hf.chatCompletion({
-      model: "meta-llama/Llama-3.2-3B-Instruct",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      max_tokens: 800,
-      temperature: 0.3
+    const response = await fetch("https://router.huggingface.co/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "Qwen/Qwen2.5-7B-Instruct",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        max_tokens: 1200,
+        temperature: 0.3,
+        top_p: 0.9
+      })
     });
-    
-    if (response.choices && response.choices[0]?.message?.content) {
-      return response.choices[0].message.content.trim();
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`HF API returned status ${response.status}:`, errorText);
+      
+      if (response.status === 429) {
+        return "AI service is currently rate limited. Please try again in a moment.";
+      }
+      if (response.status === 503) {
+        return "AI model is currently loading. Please try again in 20 seconds.";
+      }
+      
+      return "AI service temporarily unavailable. Please try again.";
     }
-    
-    return "Unable to generate response. Please try again.";
+
+    const data = await response.json();
+    const aiResponse = data.choices?.[0]?.message?.content || "";
+    console.log("HF API response received, length:", aiResponse.length);
+
+    if (aiResponse && aiResponse.length > 50) {
+      return aiResponse.trim();
+    }
+
+    if (data.error) {
+      console.error("HF API error:", data.error);
+      return "AI service temporarily unavailable. Please try again.";
+    }
+
+    return "Unable to generate a complete response. Please try again.";
   } catch (error) {
-    console.error("Hugging Face SDK error:", error);
-    return "Error connecting to AI service. Please try again.";
+    console.error("Hugging Face error:", error);
+    return "AI service temporarily unavailable. Please try again.";
   }
 }
 
