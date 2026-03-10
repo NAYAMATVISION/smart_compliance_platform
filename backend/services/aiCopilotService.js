@@ -107,60 +107,93 @@ async function callLLM(systemPrompt, userPrompt) {
     return "AI service is not configured. Please contact your administrator.";
   }
 
-  try {
-    console.log("Calling HF API with model: Qwen/Qwen2.5-7B-Instruct");
-    console.log("Prompt length:", userPrompt.length);
-    
-    const response = await fetch("https://router.huggingface.co/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "Qwen/Qwen2.5-7B-Instruct",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        max_tokens: 1200,
-        temperature: 0.3,
-        top_p: 0.9
-      })
-    });
+  // Retry logic for better reliability
+  const maxRetries = 2;
+  let lastError = null;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`HF API returned status ${response.status}:`, errorText);
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      console.log(`Calling HF API (attempt ${attempt + 1}/${maxRetries})`);
       
-      if (response.status === 429) {
-        return "AI service is currently rate limited. Please try again in a moment.";
+      const response = await fetch("https://router.huggingface.co/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "Qwen/Qwen2.5-7B-Instruct",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          max_tokens: 1200,
+          temperature: 0.3,
+          top_p: 0.9
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`HF API returned status ${response.status}:`, errorText);
+        
+        if (response.status === 429) {
+          // Rate limited - wait and retry
+          if (attempt < maxRetries - 1) {
+            console.log("Rate limited, waiting 3 seconds before retry...");
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            continue;
+          }
+          return "AI service is currently rate limited. Please try again in a moment.";
+        }
+        
+        if (response.status === 503) {
+          // Model loading - wait and retry
+          if (attempt < maxRetries - 1) {
+            console.log("Model loading, waiting 5 seconds before retry...");
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            continue;
+          }
+          return "AI model is currently loading. Please try again in 20 seconds.";
+        }
+        
+        lastError = errorText;
+        continue;
       }
-      if (response.status === 503) {
-        return "AI model is currently loading. Please try again in 20 seconds.";
+
+      const data = await response.json();
+      const aiResponse = data.choices?.[0]?.message?.content || "";
+      console.log("HF API response received, length:", aiResponse.length);
+
+      if (aiResponse && aiResponse.length > 50) {
+        return aiResponse.trim();
       }
+
+      if (data.error) {
+        console.error("HF API error:", data.error);
+        lastError = data.error;
+        continue;
+      }
+
+      // Response too short, retry
+      if (attempt < maxRetries - 1) {
+        console.log("Response too short, retrying...");
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        continue;
+      }
+
+    } catch (error) {
+      console.error(`Hugging Face error (attempt ${attempt + 1}):`, error);
+      lastError = error;
       
-      return "AI service temporarily unavailable. Please try again.";
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        continue;
+      }
     }
-
-    const data = await response.json();
-    const aiResponse = data.choices?.[0]?.message?.content || "";
-    console.log("HF API response received, length:", aiResponse.length);
-
-    if (aiResponse && aiResponse.length > 50) {
-      return aiResponse.trim();
-    }
-
-    if (data.error) {
-      console.error("HF API error:", data.error);
-      return "AI service temporarily unavailable. Please try again.";
-    }
-
-    return "Unable to generate a complete response. Please try again.";
-  } catch (error) {
-    console.error("Hugging Face error:", error);
-    return "AI service temporarily unavailable. Please try again.";
   }
+
+  return "AI service temporarily unavailable after multiple attempts. Please try again.";
 }
 
 function extractActions(answer, context) {
