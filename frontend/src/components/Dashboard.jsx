@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import EvidenceUpload from "./EvidenceUpload";
 import ActivityFeed from "./ActivityFeed";
 import API_URL from "../config";
@@ -7,6 +8,7 @@ import "./styles/dashboard.css";
 function Dashboard() {
   console.log("[Dashboard] Component mounted");
   
+  const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [upcoming, setUpcoming] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -40,18 +42,25 @@ function Dashboard() {
         })
       ]);
 
+      if (summaryRes.status === 401 || tasksRes.status === 401) {
+        localStorage.removeItem("token");
+        navigate("/login");
+        return;
+      }
+
       const summaryData = await summaryRes.json();
       const upcomingData = await upcomingRes.json();
       const tasksData = await tasksRes.json();
 
-      setSummary(summaryData);
-      setUpcoming(upcomingData);
-      setTasks(tasksData);
+      setSummary(summaryRes.ok ? summaryData : null);
+      setUpcoming(upcomingRes.ok && Array.isArray(upcomingData) ? upcomingData : []);
+      setTasks(tasksRes.ok && Array.isArray(tasksData) ? tasksData : []);
 
       // Fetch evidence status for all tasks
       const evidenceStatuses = {};
+      const safeTasks = tasksRes.ok && Array.isArray(tasksData) ? tasksData : [];
       await Promise.all(
-        tasksData.map(async (task) => {
+        safeTasks.map(async (task) => {
           try {
             const evidenceRes = await fetch(`${API_URL}/evidence/task/${task._id}`, {
               headers: { Authorization: `Bearer ${token}` }
@@ -66,6 +75,10 @@ function Dashboard() {
       setTaskEvidenceStatus(evidenceStatuses);
     } catch (error) {
       console.error("[Dashboard] Error fetching data:", error);
+      if (error.message?.includes("401") || error.message?.includes("Unauthorized")) {
+        localStorage.removeItem("token");
+        navigate("/login");
+      }
     }
   };
 

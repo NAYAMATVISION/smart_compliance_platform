@@ -11,78 +11,72 @@ const router = express.Router();
 
 // SUMMARY
 router.get("/summary", authMiddleware, async (req, res) => {
-  const orgId = req.organizationId;
-  const today = new Date();
+  try {
+    const orgId = req.organizationId;
+    if (!orgId) return res.status(400).json({ message: "Organization not found" });
 
-  const total = await ComplianceTask.countDocuments({ orgId });
+    const today = new Date();
 
-  const pending = await ComplianceTask.countDocuments({
-    orgId,
-    status: "pending"
-  });
+    const total = await ComplianceTask.countDocuments({ orgId });
+    const pending = await ComplianceTask.countDocuments({ orgId, status: "pending" });
+    const overdue = await ComplianceTask.countDocuments({ orgId, status: "pending", dueDate: { $lt: today } });
+    const dueSoon = await ComplianceTask.countDocuments({ orgId, status: "pending", dueDate: { $gte: today } });
 
-  const overdue = await ComplianceTask.countDocuments({
-    orgId,
-    status: "pending",
-    dueDate: { $lt: today }
-  });
+    const tasks = await ComplianceTask.find({ orgId });
+    const healthScore = calculateComplianceHealth(tasks);
 
-  const dueSoon = await ComplianceTask.countDocuments({
-    orgId,
-    status: "pending",
-    dueDate: { $gte: today }
-  });
+    const profile = await BusinessProfile.findOne({ orgId });
+    let applicabilitySummary = null;
+    let topRiskDomains = [];
 
-  const tasks = await ComplianceTask.find({ orgId });
-  const healthScore = calculateComplianceHealth(tasks);
+    if (profile) {
+      const applicabilityResult = computeApplicabilityMatrix(profile);
+      applicabilitySummary = generateApplicabilitySummary(profile, applicabilityResult);
+      topRiskDomains = getTopRiskDomains(applicabilityResult);
+    }
 
-  const profile = await BusinessProfile.findOne({ orgId });
-  let applicabilitySummary = null;
-  let topRiskDomains = [];
-
-  if (profile) {
-    const applicabilityResult = computeApplicabilityMatrix(profile);
-    applicabilitySummary = generateApplicabilitySummary(profile, applicabilityResult);
-    topRiskDomains = getTopRiskDomains(applicabilityResult);
+    res.json({ total, pending, overdue, dueSoon, healthScore, applicabilitySummary, topRiskDomains });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
   }
-
-  res.json({ 
-    total, 
-    pending, 
-    overdue, 
-    dueSoon,
-    healthScore,
-    applicabilitySummary,
-    topRiskDomains
-  });
 });
 
 
 // UPCOMING
 router.get("/upcoming", authMiddleware, async (req, res) => {
-  const orgId = req.organizationId;
-  const today = new Date();
+  try {
+    const orgId = req.organizationId;
+    if (!orgId) return res.status(400).json({ message: "Organization not found" });
 
-  const tasks = await ComplianceTask.find({
-    orgId,
-    status: "pending",
-    dueDate: { $gte: today }
-  })
-    .sort({ dueDate: 1 })
-    .limit(5);
+    const today = new Date();
+    const tasks = await ComplianceTask.find({
+      orgId,
+      status: "pending",
+      dueDate: { $gte: today }
+    })
+      .sort({ dueDate: 1 })
+      .limit(5);
 
-  res.json(tasks);
+    res.json(tasks);
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 
 // ALL TASKS
 router.get("/tasks", authMiddleware, async (req, res) => {
-  const orgId = req.organizationId;
+  try {
+    const orgId = req.organizationId;
+    if (!orgId) return res.status(400).json({ message: "Organization not found" });
 
-  const tasks = await ComplianceTask.find({ orgId })
-    .sort({ dueDate: 1 });
+    const tasks = await ComplianceTask.find({ orgId })
+      .sort({ dueDate: 1 });
 
-  res.json(tasks);
+    res.json(tasks);
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 // MARK TASK COMPLETE
