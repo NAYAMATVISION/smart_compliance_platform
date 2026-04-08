@@ -26,10 +26,7 @@ const { startReminderJob } = require("./jobs/reminderJob");
 const app = express();
 
 // CORS Configuration
-app.use(cors({
-  origin: true,
-  credentials: true
-}));
+app.use(cors());
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
