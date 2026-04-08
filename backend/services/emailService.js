@@ -1,11 +1,11 @@
-const Brevo = require("@getbrevo/brevo");
+const SibApiV3Sdk = require("@getbrevo/brevo");
 const apiInstance = require("../config/mailer");
 
 const FROM_EMAIL = process.env.MAIL_USER || "nayamatemeet@gmail.com";
 const FROM_NAME = "Compliance System";
 
 const sendEmail = async (to, subject, html) => {
-  const sendSmtpEmail = new Brevo.SendSmtpEmail();
+  const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
   sendSmtpEmail.sender = { name: FROM_NAME, email: FROM_EMAIL };
   sendSmtpEmail.to = [{ email: to }];
   sendSmtpEmail.subject = subject;
