@@ -1,23 +1,12 @@
-const nodemailer = require("nodemailer");
+const Brevo = require("@getbrevo/brevo");
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.MAIL_USER,
-    pass: process.env.MAIL_PASS
-  }
-});
+const apiInstance = new Brevo.TransactionalEmailsApi();
+apiInstance.authentications["apiKey"].apiKey = process.env.BREVO_API_KEY;
 
-// Verify transporter configuration
-transporter.verify((error, success) => {
-  if (error) {
-    console.error("[Mailer] ✗ Transporter verification failed:", error.message);
-  } else {
-    console.log("[Mailer] ✓ SMTP configured successfully - Ready to send emails");
-    console.log(`[Mailer] Using account: ${process.env.MAIL_USER}`);
-  }
-});
+if (process.env.BREVO_API_KEY) {
+  console.log("[Mailer] ✓ Brevo configured successfully");
+} else {
+  console.error("[Mailer] ✗ BREVO_API_KEY missing");
+}
 
-module.exports = transporter;
+module.exports = apiInstance;

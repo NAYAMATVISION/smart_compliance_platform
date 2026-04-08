@@ -1,4 +1,17 @@
-const transporter = require("../config/mailer");
+const Brevo = require("@getbrevo/brevo");
+const apiInstance = require("../config/mailer");
+
+const FROM_EMAIL = process.env.MAIL_USER || "nayamatemeet@gmail.com";
+const FROM_NAME = "Compliance System";
+
+const sendEmail = async (to, subject, html) => {
+  const sendSmtpEmail = new Brevo.SendSmtpEmail();
+  sendSmtpEmail.sender = { name: FROM_NAME, email: FROM_EMAIL };
+  sendSmtpEmail.to = [{ email: to }];
+  sendSmtpEmail.subject = subject;
+  sendSmtpEmail.htmlContent = html;
+  await apiInstance.sendTransacEmail(sendSmtpEmail);
+};
 
 /**
  * Send overdue tasks summary email to admin
@@ -68,14 +81,7 @@ const sendOverdueTasksSummaryEmail = async (adminEmail, overdueTasks) => {
       </div>
     `;
 
-    const mailOptions = {
-      from: process.env.MAIL_USER,
-      to: adminEmail,
-      subject: `⚠️ Daily Overdue Tasks Report - ${overdueTasks.length} task(s) overdue`,
-      html: htmlContent
-    };
-
-    await transporter.sendMail(mailOptions);
+    await sendEmail(adminEmail, `⚠️ Daily Overdue Tasks Report - ${overdueTasks.length} task(s) overdue`, htmlContent);
     console.log(`[Email Service] ✓ Overdue tasks summary email sent to ${adminEmail}`);
     return { sent: true, taskCount: overdueTasks.length };
   } catch (error) {
@@ -116,14 +122,7 @@ const sendNewProfileNotificationEmail = async (adminEmail, profileData) => {
       </div>
     `;
 
-    const mailOptions = {
-      from: process.env.MAIL_USER,
-      to: adminEmail,
-      subject: `✅ New Business Profile Created - ${profileData.legalName}`,
-      html: htmlContent
-    };
-
-    await transporter.sendMail(mailOptions);
+    await sendEmail(adminEmail, `✅ New Business Profile Created - ${profileData.legalName}`, htmlContent);
     console.log(`[Email Service] ✓ New profile notification email sent to ${adminEmail}`);
     return { sent: true };
   } catch (error) {
@@ -152,14 +151,7 @@ const sendTestEmail = async (toEmail) => {
       </div>
     `;
 
-    const mailOptions = {
-      from: process.env.MAIL_USER,
-      to: toEmail,
-      subject: "Test Email - Compliance System",
-      html: htmlContent
-    };
-
-    await transporter.sendMail(mailOptions);
+    await sendEmail(toEmail, "Test Email - Compliance System", htmlContent);
     console.log(`[Email Service] ✓ Test email sent to ${toEmail}`);
     return { sent: true, message: "Test email sent successfully" };
   } catch (error) {
@@ -200,14 +192,7 @@ const sendWelcomeEmail = async (userEmail, userName) => {
       </div>
     `;
 
-    const mailOptions = {
-      from: process.env.MAIL_USER,
-      to: userEmail,
-      subject: "🎉 Welcome to Compliance System",
-      html: htmlContent
-    };
-
-    await transporter.sendMail(mailOptions);
+    await sendEmail(userEmail, "🎉 Welcome to Compliance System", htmlContent);
     console.log(`[Email Service] ✓ Welcome email sent to ${userEmail}`);
     return { sent: true };
   } catch (error) {
