@@ -2,6 +2,10 @@ const FROM_EMAIL = process.env.MAIL_USER || "nayamatemeet@gmail.com";
 const FROM_NAME = "Compliance System";
 
 const sendEmail = async (to, subject, html) => {
+  const apiKey = process.env.BREVO_API_KEY;
+  console.log("[Mailer] API Key present:", !!apiKey);
+  console.log("[Mailer] API Key first 10 chars:", apiKey?.substring(0, 10));
+  
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
