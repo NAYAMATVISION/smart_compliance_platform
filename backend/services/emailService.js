@@ -1,22 +1,29 @@
-const SibApiV3Sdk = require("@getbrevo/brevo");
-const apiInstance = require("../config/mailer");
-
 const FROM_EMAIL = process.env.MAIL_USER || "nayamatemeet@gmail.com";
 const FROM_NAME = "Compliance System";
 
 const sendEmail = async (to, subject, html) => {
-  const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
-  sendSmtpEmail.sender = { name: FROM_NAME, email: FROM_EMAIL };
-  sendSmtpEmail.to = [{ email: to }];
-  sendSmtpEmail.subject = subject;
-  sendSmtpEmail.htmlContent = html;
-  try {
-    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
-    console.log("[Mailer] Email sent successfully:", JSON.stringify(result?.body || result));
-  } catch (err) {
-    console.error("[Mailer] Brevo error details:", JSON.stringify(err?.response?.body || err?.message || err));
-    throw err;
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "accept": "application/json",
+      "api-key": process.env.BREVO_API_KEY,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      sender: { name: FROM_NAME, email: FROM_EMAIL },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    console.error("[Mailer] Brevo error:", JSON.stringify(error));
+    throw new Error(error.message || "Brevo API error");
   }
+
+  console.log("[Mailer] ✓ Email sent to", to);
 };
 
 /**
