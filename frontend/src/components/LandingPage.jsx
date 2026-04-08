@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import "./styles/landing.css";
+import "./styles/Landing.css";
 
 function LandingPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
