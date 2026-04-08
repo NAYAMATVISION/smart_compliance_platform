@@ -10,7 +10,13 @@ const sendEmail = async (to, subject, html) => {
   sendSmtpEmail.to = [{ email: to }];
   sendSmtpEmail.subject = subject;
   sendSmtpEmail.htmlContent = html;
-  await apiInstance.sendTransacEmail(sendSmtpEmail);
+  try {
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log("[Mailer] Email sent successfully:", JSON.stringify(result?.body || result));
+  } catch (err) {
+    console.error("[Mailer] Brevo error details:", JSON.stringify(err?.response?.body || err?.message || err));
+    throw err;
+  }
 };
 
 /**
